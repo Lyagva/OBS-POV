@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>КВА</title>
+    <style>
+        * {
+            font-family: Arial, sans-serif;
+        }
+        .input-textarea-container {
+            display: flex;
+            gap: 20px;
+        }
+
+        #lines-container {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+        }
+
+        textarea {
+            width: 300px;
+            height: 100%;
+            resize: none;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 14px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            box-sizing: border-box;
+            min-height: 400px; /* Adjust based on your design */
+        }
+
+        .line {
+            margin-bottom: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        input, select {
+            padding: 5px;
+            width: 200px;
+        }
+        .key-input {
+            width: 100px;
+        }
+        .button-group {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .log-entry {
+            padding: 5px;
+            margin: 3px 0;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        .scene-triggered {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+        .regular-key {
+            background-color: #f5f5f5;
+            color: #424242;
+        }
+    </style>
+</head>
+<body>
+    <h2>Квакучая система вебок</h2>
+    <div class="button-group">
+        <div class="button-group">
+            <button onclick="applySettings()">Применить настройки</button>
+            <button onclick="updateSceneList()">Обновить список сцен</button>
+            <button onclick="copyConfiguration()">Копировать конфигурацию</button>
+        </div>
+    </div>
+    <div class="input-textarea-container">
+        <div class="container">
+            <div id="lines-container">
+                {% for i in range(10) %}
+                <div class="line">
+                    <input type="text" class="key-input" placeholder="Клавиша {{ i+1 }}">
+                    <input type="text" class="scene-input" placeholder="Сцена {{ i+1 }} ">
+                    <select class="scene-select" onchange="updateSceneInput(this)">
+                        <option value="">Выберите Сцену</option>
+                        {% for scene in scenes %}
+                        <option value="{{ scene }}">{{ scene }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <textarea id="config-output" oninput="debounce(updateInputsFromJson, 500)"></textarea>
+    </div>
+
+    <script>
+        function updateSceneInput(selectElement) {
+            const line = selectElement.closest('.line');
+            const sceneInput = line.querySelector('.scene-input');
+            sceneInput.value = selectElement.value;
+        }
+
+        async function applySettings() {
+            const configurations = [];
+            document.querySelectorAll('.line').forEach(line => {
+                const key = line.querySelector('.key-input').value;
+                const scene = line.querySelector('.scene-input').value;
+                if(key && scene) {
+                    configurations.push({key, scene});
+                }
+            });
+
+            try {
+                const response = await fetch('/save', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ configurations })
+                });
+
+                if(response.ok) {
+                    alert('Settings applied successfully!');
+                } else {
+                    alert('Error saving settings');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to save settings');
+            }
+        }
+
+        async function updateSceneList() {
+            try {
+                const response = await fetch('/scenes');
+                const scenes = await response.json();
+
+                // Update all dropdowns
+                document.querySelectorAll('.scene-select').forEach(select => {
+                    // Clear existing options except the first
+                    while(select.options.length > 1) {
+                        select.remove(1);
+                    }
+
+                    // Add new options
+                    scenes.forEach(scene => {
+                        const option = new Option(scene, scene);
+                        select.add(option);
+                    });
+                });
+
+                alert('Scene list updated successfully!');
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to update scene list');
+            }
+        }
+
+        updateSceneList();
+
+        function updateConfigurationOutput() {
+            let configurations = [];
+            document.querySelectorAll('.line').forEach(line => {
+                const key = line.querySelector('.key-input').value.trim();
+                const scene = line.querySelector('.scene-input').value.trim();
+                if (key && scene) {
+                    configurations.push({ key, scene });
+                }
+            });
+
+            document.getElementById('config-output').value = JSON.stringify(configurations, null, 2);
+        }
+
+        function updateInputsFromJson() {
+            try {
+                const text = document.getElementById('config-output').value.trim();
+                if (!text) return;
+
+                const configurations = JSON.parse(text);
+                if (!Array.isArray(configurations)) throw new Error("Invalid JSON format");
+
+                const keyInputs = document.querySelectorAll('.key-input');
+                const sceneInputs = document.querySelectorAll('.scene-input');
+                const sceneSelects = document.querySelectorAll('.scene-select');
+
+                keyInputs.forEach((input, index) => {
+                    if (configurations[index]) {
+                        input.value = configurations[index].key || "";
+                        sceneInputs[index].value = configurations[index].scene || "";
+
+                        // Update the corresponding scene select dropdown
+                        sceneSelects[index].value = configurations[index].scene || "";
+                    } else {
+                        input.value = "";
+                        sceneInputs[index].value = "";
+                        sceneSelects[index].value = "";
+                    }
+                });
+            } catch (error) {
+                console.error("Invalid JSON:", error);
+            }
+        }
+
+        function copyConfiguration() {
+            const textArea = document.getElementById('config-output');
+            if (!textArea.value) {
+                alert('Нет данных для копирования.');
+                return;
+            }
+            textArea.select();
+            document.execCommand('copy');
+            alert('Конфигурация скопирована!');
+        }
+
+        function debounce(func, delay) {
+            let timer;
+            return function() {
+                clearTimeout(timer);
+                timer = setTimeout(() => func(), delay);
+            };
+        }
+
+        // Attach event listeners to sync data between input fields & JSON
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.key-input, .scene-input').forEach(input => {
+                input.addEventListener('input', updateConfigurationOutput);
+            });
+
+            document.querySelectorAll('.scene-select').forEach(select => {
+                select.addEventListener('change', () => {
+                    updateSceneInput(select);
+                    updateConfigurationOutput();
+                });
+            });
+
+            updateConfigurationOutput(); // Initialize on page load
+        });
+    </script>
+
+    <div class="log-container">
+        <h3>Логи нажатий</h3>
+        <div id="log-entries" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; margin-top: 10px;">
+            <!-- Logs will appear here -->
+        </div>
+    </div>
+
+    <script>
+        // Add this to the existing script
+        const logEntries = document.getElementById('log-entries');
+        const eventSource = new EventSource('/logs');
+        const MAX_LOG_HISTORY = {{ MAX_LOG_HISTORY }}; // Set the maximum number of log entries
+
+        eventSource.onmessage = function(e) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' +
+                (e.data.includes('триггернута') ? 'scene-triggered' : 'regular-key');
+            entry.textContent = e.data;
+
+            // Insert the new log entry at the beginning
+            logEntries.insertBefore(entry, logEntries.firstChild);
+
+            // Remove excess log entries beyond MAX_LOG_HISTORY
+            while (logEntries.children.length > MAX_LOG_HISTORY) {
+                logEntries.removeChild(logEntries.lastChild);
+            }
+        };
+    </script>
+
+</body>
+</html>
