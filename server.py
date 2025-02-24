@@ -1,18 +1,29 @@
 # server.py
+import json
+
 import flask
-from flask import Flask, render_template, request, Response
+from flask import Flask, render_template, request, Response, jsonify
 import obs
 import capture
 from threading import Thread
 import config
+import os
+import sys
 
 
-app = Flask(__name__)
+def get_base_path():
+    """Returns the correct base path when running as an .exe"""
+    if getattr(sys, 'frozen', False):  # When running as an executable
+        return sys._MEIPASS
+    return os.path.abspath(".")
+
+
+app = Flask(__name__, template_folder=os.path.join(get_base_path(), "templates"))
 
 
 @app.route('/')
 def index():
-    return render_template('index.html', scenes=[], MAX_LOG_HISTORY=config.MAX_LOG_HISTORY)
+    return render_template('index.html', scenes=[], max_ui_log_history=config.max_ui_log_history)
 
 
 @app.route("/scenes", methods=["GET"])
@@ -20,36 +31,31 @@ def scenes():
     return obs.get_scene_list()
 
 
-@app.route('/save', methods=["POST"])
-def save():
-    new_scenes = {}
-    for element in request.get_json()["configurations"]:
-        new_scenes[element["key"]] = element["scene"]
+@app.route('/post_setup', methods=["POST"])
+def post_setup():
+    new_setup = {"key": request.json["key"], "scene": request.json["scene"]}
 
-    with config.scene_lock:  # Thread-safe write
-        config.scenes.clear()
-        config.scenes.update(new_scenes)
+    with config.lock:  # Thread-safe write
+        config.setup.clear()
+        config.setup.update(new_setup)
 
-    print(config.scenes)
+    print(config.setup)
     return ""
 
+@app.route('/get_setup', methods=["GET"])
+def get_setup():
+    return jsonify(config.setup)
 
-@app.route('/logs')
-def logs():
+
+@app.route('/key_log')
+def key_log():
     def generate():
         with config.log_condition:
-            # Send all existing logs first
-            for entry in list(config.log_history):  # Copy to avoid modification during iteration
-                yield f"data: {entry}\n\n"
-
             # Continuously wait for new logs
             while True:
                 config.log_condition.wait()  # Remove timeout, only wake when notified
 
-                # Only send new logs
-                while config.log_history:
-                    entry = config.log_history.popleft()  # Safely remove logs
-                    yield f"data: {entry}\n\n"
+                yield f"data: {json.dumps(config.key_log)}\n\n"
 
     return Response(generate(), mimetype='text/event-stream')
 

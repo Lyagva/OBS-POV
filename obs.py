@@ -2,7 +2,7 @@
 import obsws_python as obs
 import config
 
-with config.scene_lock:
+with config.lock:
     host = config.obs_host
     port = config.obs_port
     password = config.obs_password
@@ -20,6 +20,7 @@ def get_scene_list():
 
 def set_active_scene(scene_name: str):
     obs_client.set_current_program_scene(scene_name)
+
 
 if __name__ == "__main__":
     get_scene_list()

@@ -8,6 +8,7 @@
         * {
             font-family: Arial, sans-serif;
         }
+
         .input-textarea-container {
             display: flex;
             gap: 20px;
@@ -37,18 +38,22 @@
             display: flex;
             gap: 10px;
         }
+
         input, select {
             padding: 5px;
             width: 200px;
         }
+
         .key-input {
             width: 100px;
         }
+
         .button-group {
             margin: 20px 0;
             display: flex;
             gap: 10px;
         }
+
         button {
             padding: 10px 20px;
             background-color: #4CAF50;
@@ -57,33 +62,27 @@
             border-radius: 4px;
             cursor: pointer;
         }
+
         button:hover {
             background-color: #45a049;
         }
 
-        .log-entry {
-            padding: 5px;
-            margin: 3px 0;
-            border-radius: 3px;
-            font-family: monospace;
-        }
-        .scene-triggered {
-            background-color: #e8f5e9;
-            color: #2e7d32;
-        }
-        .regular-key {
-            background-color: #f5f5f5;
-            color: #424242;
-        }
+
+        .log-entry { font-family: monospace; padding: 4px; margin: 2px 0; border-radius: 4px; border: 1px solid; }
+        .error { background-color: #ffebee; color: #c62828; border-color: #b71c1c; }
+        .notice { background-color: #fff8e1; color: #ff8f00; border-color: #ff6f00; }
+        .info { background-color: #e8f5e9; color: #2e7d32; border-color: #1b5e20; }
+        .debug { background-color: #e0e0e0; color: #424242; border-color: #212121; }
     </style>
 </head>
 <body>
     <h2>Квакучая система вебок</h2>
     <div class="button-group">
         <div class="button-group">
-            <button onclick="applySettings()">Применить настройки</button>
+            <button onclick="saveSetup()">Применить настройки</button>
             <button onclick="updateSceneList()">Обновить список сцен</button>
-            <button onclick="copyConfiguration()">Копировать конфигурацию</button>
+            <button onclick="copySetup()">Копировать конфигурацию</button>
+            <button onclick="pasteSetup()">Вставить конфигурацию</button>
         </div>
     </div>
     <div class="input-textarea-container">
@@ -103,44 +102,154 @@
                 {% endfor %}
             </div>
         </div>
-        <textarea id="config-output" oninput="debounce(updateInputsFromJson, 500)"></textarea>
+        <textarea id="config-output" readonly></textarea>
+    </div>
+
+    <div class="log-container">
+        <h3>Логи нажатий</h3>
+        <select id="log-level-filter">
+            <option value="ERROR">Ошибка</option>
+            <option value="NOTICE">Уведомление</option>
+            <option value="INFO">Информация</option>
+            <option value="DEBUG" selected="selected">Отладка</option>
+        </select>
+        <div id="log-entries"
+             style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; margin-top: 10px;">
+            <!-- Logs will appear here -->
+        </div>
     </div>
 
     <script>
+        const LogLevel = {
+            ERROR: 'error',
+            NOTICE: 'notice',
+            INFO: 'info',
+            DEBUG: 'debug'
+        };
+        const LogLevelFilter = {
+            ERROR: ["error"],
+            NOTICE: ["error", "notice"],
+            INFO: ["error", "notice", "info"],
+            DEBUG: ["error", "notice", "info", "debug"]
+        }
+        let setup = {key: [], scene: []};
+
+        const MAX_LOG_HISTORY = {{ max_ui_log_history }};
+
+        function logMessage(message, level) {
+            const selectedLevel = document.getElementById('log-level-filter').value;
+            const allowedLevels = LogLevelFilter[selectedLevel] || [];
+            if (!allowedLevels.includes(level)) return;
+
+            const logEntries = document.getElementById('log-entries');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${level}`;
+
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${level.toUpperCase()}] [${timestamp}] ${message}`;
+
+            logEntries.insertBefore(entry, logEntries.firstChild);
+        }
+
         function updateSceneInput(selectElement) {
             const line = selectElement.closest('.line');
             const sceneInput = line.querySelector('.scene-input');
             sceneInput.value = selectElement.value;
         }
 
-        async function applySettings() {
-            const configurations = [];
+        function parseSetup() {
+            setup = {key: [], scene: []};
             document.querySelectorAll('.line').forEach(line => {
                 const key = line.querySelector('.key-input').value;
                 const scene = line.querySelector('.scene-input').value;
-                if(key && scene) {
-                    configurations.push({key, scene});
-                }
+                setup.key.push(key);
+                setup.scene.push(scene);
             });
+        }
+
+        async function pasteSetup() {
+            try {
+                const text = await navigator.clipboard.readText();
+                const json = JSON.parse(text);
+
+                if (
+                    typeof json === 'object' &&
+                    json !== null &&
+                    Object.keys(json).length === 2 &&
+                    'key' in json &&
+                    'scene' in json &&
+                    Array.isArray(json.key) &&
+                    Array.isArray(json.scene) &&
+                    json.key.length === 10 &&
+                    json.scene.length === 10 &&
+                    json.key.every(item => typeof item === 'string') &&
+                    json.scene.every(item => typeof item === 'string')
+                ) {
+                    setup = json;
+                    updateSetupInputFields();
+
+                    logMessage("Успешно импортирована кофигурация из буфера обмена", LogLevel.INFO);
+                } else {
+                    logMessage("Формат конфигурации неверный", LogLevel.ERROR);
+
+                }
+            } catch (error) {
+                logMessage("Не удалось импортировать настройки из буфера обмена: " + error, LogLevel.ERROR);
+            }
+        }
+
+        async function saveSetup() {
+            parseSetup();
 
             try {
-                const response = await fetch('/save', {
+                const response = await fetch('/post_setup', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ configurations })
+                    body: JSON.stringify(setup)
                 });
 
-                if(response.ok) {
-                    alert('Settings applied successfully!');
+                if (response.ok) {
+                    logMessage('Настройки успешно применены!', LogLevel.INFO);
                 } else {
-                    alert('Error saving settings');
+                    logMessage('Не удалось применить настройки', LogLevel.ERROR);
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('Failed to save settings');
+                logMessage('Не удалось применить настройки: ' + error, LogLevel.ERROR);
             }
+        }
+
+        async function loadSetup() {
+            try {
+                const response = await fetch('/get_setup');
+                if (!response.ok) {
+                    logMessage('Не удалось загрузить настройки', LogLevel.ERROR);
+                    return;
+                }
+
+                setup = await response.json();
+                updateSetupInputFields()
+
+                logMessage('Настройки загружены!', LogLevel.INFO);
+            } catch (error) {
+                console.error('Error:', error);
+                logMessage('Ошибка загрузки настроек: ' + error, LogLevel.ERROR);
+            }
+        }
+
+        function updateSetupInputFields() {
+            let lines = document.querySelectorAll('.line');
+                for (let i = 0; i < lines.length; i++) {
+                    let line = lines[i];
+                    const keyInput = line.querySelector('.key-input');
+                    const sceneInput = line.querySelector('.scene-input');
+                    keyInput.value = setup.key[i];
+                    sceneInput.value = setup.scene[i];
+                }
+
+                updateSetupOutput();
         }
 
         async function updateSceneList() {
@@ -148,136 +257,73 @@
                 const response = await fetch('/scenes');
                 const scenes = await response.json();
 
-                // Update all dropdowns
                 document.querySelectorAll('.scene-select').forEach(select => {
-                    // Clear existing options except the first
-                    while(select.options.length > 1) {
+                    while (select.options.length > 1) {
                         select.remove(1);
                     }
-
-                    // Add new options
                     scenes.forEach(scene => {
                         const option = new Option(scene, scene);
                         select.add(option);
                     });
                 });
 
-                alert('Scene list updated successfully!');
+                logMessage('Список сцен успешно обновлён!', LogLevel.INFO);
             } catch (error) {
                 console.error('Error:', error);
-                alert('Failed to update scene list');
+                logMessage('Не удалось обновить список сцен: ' + error, LogLevel.ERROR);
             }
         }
-
         updateSceneList();
 
-        function updateConfigurationOutput() {
-            let configurations = [];
-            document.querySelectorAll('.line').forEach(line => {
-                const key = line.querySelector('.key-input').value.trim();
-                const scene = line.querySelector('.scene-input').value.trim();
-                if (key && scene) {
-                    configurations.push({ key, scene });
-                }
-            });
-
-            document.getElementById('config-output').value = JSON.stringify(configurations, null, 2);
+        function updateSetupOutput() {
+            parseSetup();
+            document.getElementById('config-output').value = JSON.stringify(setup, null);
         }
 
-        function updateInputsFromJson() {
-            try {
-                const text = document.getElementById('config-output').value.trim();
-                if (!text) return;
-
-                const configurations = JSON.parse(text);
-                if (!Array.isArray(configurations)) throw new Error("Invalid JSON format");
-
-                const keyInputs = document.querySelectorAll('.key-input');
-                const sceneInputs = document.querySelectorAll('.scene-input');
-                const sceneSelects = document.querySelectorAll('.scene-select');
-
-                keyInputs.forEach((input, index) => {
-                    if (configurations[index]) {
-                        input.value = configurations[index].key || "";
-                        sceneInputs[index].value = configurations[index].scene || "";
-
-                        // Update the corresponding scene select dropdown
-                        sceneSelects[index].value = configurations[index].scene || "";
-                    } else {
-                        input.value = "";
-                        sceneInputs[index].value = "";
-                        sceneSelects[index].value = "";
-                    }
-                });
-            } catch (error) {
-                console.error("Invalid JSON:", error);
-            }
-        }
-
-        function copyConfiguration() {
+        function copySetup() {
             const textArea = document.getElementById('config-output');
             if (!textArea.value) {
-                alert('Нет данных для копирования.');
+                logMessage('Нет данных для копирования.', LogLevel.ERROR);
                 return;
             }
             textArea.select();
             document.execCommand('copy');
-            alert('Конфигурация скопирована!');
+            logMessage('Конфигурация скопирована!', LogLevel.INFO);
         }
 
-        function debounce(func, delay) {
-            let timer;
-            return function() {
-                clearTimeout(timer);
-                timer = setTimeout(() => func(), delay);
-            };
-        }
+        const eventSource = new EventSource('/key_log');
+        eventSource.onmessage = function (e) {
+            try {
+                let data = JSON.parse(e.data);
 
-        // Attach event listeners to sync data between input fields & JSON
-        document.addEventListener('DOMContentLoaded', () => {
-            document.querySelectorAll('.key-input, .scene-input').forEach(input => {
-                input.addEventListener('input', updateConfigurationOutput);
-            });
+                if (typeof data !== 'object' || data === null) {
+                    console.error('Invalid data format:', e.data);
+                    return;
+                }
 
-            document.querySelectorAll('.scene-select').forEach(select => {
-                select.addEventListener('change', () => {
-                    updateSceneInput(select);
-                    updateConfigurationOutput();
-                });
-            });
+                let logLevel = data.success ? LogLevel.INFO : LogLevel.DEBUG;
+                let message = `Клавиша '${data.key}' нажата - `
+                if (data.scene)
+                    message += `Сцена '${data.scene}' активирована`
+                else
+                    message += `Сцена не назначена`
 
-            updateConfigurationOutput(); // Initialize on page load
-        });
-    </script>
-
-    <div class="log-container">
-        <h3>Логи нажатий</h3>
-        <div id="log-entries" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; margin-top: 10px;">
-            <!-- Logs will appear here -->
-        </div>
-    </div>
-
-    <script>
-        // Add this to the existing script
-        const logEntries = document.getElementById('log-entries');
-        const eventSource = new EventSource('/logs');
-        const MAX_LOG_HISTORY = {{ MAX_LOG_HISTORY }}; // Set the maximum number of log entries
-
-        eventSource.onmessage = function(e) {
-            const entry = document.createElement('div');
-            entry.className = 'log-entry ' +
-                (e.data.includes('триггернута') ? 'scene-triggered' : 'regular-key');
-            entry.textContent = e.data;
-
-            // Insert the new log entry at the beginning
-            logEntries.insertBefore(entry, logEntries.firstChild);
-
-            // Remove excess log entries beyond MAX_LOG_HISTORY
-            while (logEntries.children.length > MAX_LOG_HISTORY) {
-                logEntries.removeChild(logEntries.lastChild);
+                logMessage(message + "\t" + data.scene, logLevel);
+            } catch (error) {
+                console.error('Failed to parse JSON:', e.data, error);
             }
         };
-    </script>
 
+
+        document.addEventListener("DOMContentLoaded", function () {
+            document.querySelectorAll('.key-input, .scene-input, .scene-select').forEach(input => {
+                input.addEventListener('input', updateSetupOutput);
+                input.addEventListener('change', updateSetupOutput); // Ensures select changes trigger update
+            });
+        });
+
+
+        document.addEventListener("DOMContentLoaded", loadSetup);
+    </script>
 </body>
 </html>

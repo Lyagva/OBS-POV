@@ -60,24 +60,23 @@ def low_level_keyboard_handler(nCode, wParam, lParam):
             vk_code = lParam[0]
             try:
                 key_name = get_key_name(vk_code) or f"Unknown (VK: {vk_code})"
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                if key_name in config.setup["key"]:
+                    with config.lock:
+                        scene = config.setup["scene"][config.setup["key"].index(key_name)]
 
-                # print(f"Клавиша нажата: {key_name}")
+                    data = {
+                        "success": False,
+                        "key": key_name,
+                        "scene": scene,
+                    }
 
-                with config.scene_lock:
-                    scene = config.scenes.get(key_name, None)
+                    if scene:
+                        obs.set_active_scene(scene)
+                        data["success"] = True
 
-
-                if scene:
-                    # print(f"Triggering scene: {scene}")
-                    obs.set_active_scene(scene)
-                    message = f"{timestamp} - Клавиша '{key_name}' нажата - Сцена '{scene}' триггернута"
-                else:
-                    message = f"{timestamp} - Клавиша '{key_name}' нажата - Сцена не назначена"
-
-                with config.log_condition:
-                    config.log_history.append(message)
-                    config.log_condition.notify_all()
+                    with config.log_condition:
+                        config.key_log = data.copy()
+                        config.log_condition.notify_all()
 
             except Exception as e:
                 print(f"Ошибка: {e}")
