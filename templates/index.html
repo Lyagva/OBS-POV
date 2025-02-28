@@ -155,10 +155,10 @@
 
     <script>
         const LogLevel = {
-            ERROR: 'error',
-            NOTICE: 'notice',
-            INFO: 'info',
-            DEBUG: 'debug'
+            ERROR: "error",
+            NOTICE: "notice",
+            INFO: "info",
+            DEBUG: "debug"
         };
         const LogLevelFilter = {
             ERROR: ["error"],
@@ -171,23 +171,23 @@
         const MAX_LOG_HISTORY = {{ max_ui_log_history }};
 
         function toggleTheme() {
-            document.body.classList.toggle('dark-theme');
-            localStorage.setItem('theme', document.body.classList.contains('dark-theme') ? 'dark' : 'light');
+            document.body.classList.toggle("dark-theme");
+            localStorage.setItem("theme", document.body.classList.contains("dark-theme") ? "dark" : "light");
         }
 
         document.addEventListener("DOMContentLoaded", function() {
-            if (localStorage.getItem('theme') === 'dark') {
-                document.body.classList.add('dark-theme');
+            if (localStorage.getItem("theme") === "dark") {
+                document.body.classList.add("dark-theme");
             }
         });
 
         function logMessage(message, level) {
-            const selectedLevel = document.getElementById('log-level-filter').value;
+            const selectedLevel = document.getElementById("log-level-filter").value;
             const allowedLevels = LogLevelFilter[selectedLevel] || [];
             if (!allowedLevels.includes(level)) return;
 
-            const logEntries = document.getElementById('log-entries');
-            const entry = document.createElement('div');
+            const logEntries = document.getElementById("log-entries");
+            const entry = document.createElement("div");
             entry.className = `log-entry ${level}`;
 
             const timestamp = new Date().toLocaleTimeString();
@@ -197,16 +197,16 @@
         }
 
         function updateSceneInput(selectElement) {
-            const line = selectElement.closest('.line');
-            const sceneInput = line.querySelector('.scene-input');
+            const line = selectElement.closest(".line");
+            const sceneInput = line.querySelector(".scene-input");
             sceneInput.value = selectElement.value;
         }
 
         function parseSetup() {
             setup = {key: [], scene: []};
-            document.querySelectorAll('.line').forEach(line => {
-                const key = line.querySelector('.key-input').value;
-                const scene = line.querySelector('.scene-input').value;
+            document.querySelectorAll(".line").forEach(line => {
+                const key = line.querySelector(".key-input").value;
+                const scene = line.querySelector(".scene-input").value;
                 setup.key.push(key);
                 setup.scene.push(scene);
             });
@@ -218,17 +218,17 @@
                 const json = JSON.parse(text);
 
                 if (
-                    typeof json === 'object' &&
+                    typeof json === "object" &&
                     json !== null &&
                     Object.keys(json).length === 2 &&
-                    'key' in json &&
-                    'scene' in json &&
+                    "key" in json &&
+                    "scene" in json &&
                     Array.isArray(json.key) &&
                     Array.isArray(json.scene) &&
                     json.key.length === 10 &&
                     json.scene.length === 10 &&
-                    json.key.every(item => typeof item === 'string') &&
-                    json.scene.every(item => typeof item === 'string')
+                    json.key.every(item => typeof item === "string") &&
+                    json.scene.every(item => typeof item === "string")
                 ) {
                     setup = json;
                     updateSetupInputFields();
@@ -247,49 +247,49 @@
             parseSetup();
 
             try {
-                const response = await fetch('/post_setup', {
-                    method: 'POST',
+                const response = await fetch("/post_setup", {
+                    method: "POST",
                     headers: {
-                        'Content-Type': 'application/json',
+                        "Content-Type": "application/json",
                     },
                     body: JSON.stringify(setup)
                 });
 
                 if (response.ok) {
-                    logMessage('Настройки успешно применены!', LogLevel.INFO);
+                    logMessage("Настройки успешно применены!", LogLevel.INFO);
                 } else {
-                    logMessage('Не удалось применить настройки', LogLevel.ERROR);
+                    logMessage("Не удалось применить настройки", LogLevel.ERROR);
                 }
             } catch (error) {
-                console.error('Error:', error);
-                logMessage('Не удалось применить настройки: ' + error, LogLevel.ERROR);
+                console.error("Error:", error);
+                logMessage("Не удалось применить настройки: " + error, LogLevel.ERROR);
             }
         }
 
         async function loadSetup() {
             try {
-                const response = await fetch('/get_setup');
+                const response = await fetch("/get_setup");
                 if (!response.ok) {
-                    logMessage('Не удалось загрузить настройки', LogLevel.ERROR);
+                    logMessage("Не удалось загрузить настройки", LogLevel.ERROR);
                     return;
                 }
 
                 setup = await response.json();
                 updateSetupInputFields()
 
-                logMessage('Настройки загружены!', LogLevel.INFO);
+                logMessage("Настройки загружены!", LogLevel.INFO);
             } catch (error) {
-                console.error('Error:', error);
-                logMessage('Ошибка загрузки настроек: ' + error, LogLevel.ERROR);
+                console.error("Error:", error);
+                logMessage("Ошибка загрузки настроек: " + error, LogLevel.ERROR);
             }
         }
 
         function updateSetupInputFields() {
-            let lines = document.querySelectorAll('.line');
+            let lines = document.querySelectorAll(".line");
                 for (let i = 0; i < lines.length; i++) {
                     let line = lines[i];
-                    const keyInput = line.querySelector('.key-input');
-                    const sceneInput = line.querySelector('.scene-input');
+                    const keyInput = line.querySelector(".key-input");
+                    const sceneInput = line.querySelector(".scene-input");
                     keyInput.value = setup.key[i];
                     sceneInput.value = setup.scene[i];
                 }
@@ -299,10 +299,10 @@
 
         async function updateSceneList() {
             try {
-                const response = await fetch('/scenes');
+                const response = await fetch("/scenes");
                 const scenes = await response.json();
 
-                document.querySelectorAll('.scene-select').forEach(select => {
+                document.querySelectorAll(".scene-select").forEach(select => {
                     while (select.options.length > 1) {
                         select.remove(1);
                     }
@@ -312,50 +312,52 @@
                     });
                 });
 
-                logMessage('Список сцен успешно обновлён!', LogLevel.INFO);
+                logMessage("Список сцен успешно обновлён!", LogLevel.INFO);
             } catch (error) {
-                console.error('Error:', error);
-                logMessage('Не удалось обновить список сцен: ' + error, LogLevel.ERROR);
+                console.error("Error:", error);
+                logMessage("Не удалось обновить список сцен: " + error, LogLevel.ERROR);
             }
         }
         updateSceneList();
 
         function updateSetupOutput() {
             parseSetup();
-            document.getElementById('config-output').value = JSON.stringify(setup, null);
+            document.getElementById("config-output").value = JSON.stringify(setup, null);
         }
 
         function copySetup() {
-            const textArea = document.getElementById('config-output');
+            const textArea = document.getElementById("config-output");
             if (!textArea.value) {
-                logMessage('Нет данных для копирования.', LogLevel.ERROR);
+                logMessage("Нет данных для копирования.", LogLevel.ERROR);
                 return;
             }
             textArea.select();
-            document.execCommand('copy');
-            logMessage('Конфигурация скопирована!', LogLevel.INFO);
+            document.execCommand("copy");
+            logMessage("Конфигурация скопирована!", LogLevel.INFO);
         }
 
-        const eventSource = new EventSource('/key_log');
+        const eventSource = new EventSource("/key_log");
         eventSource.onmessage = function (e) {
             try {
                 let data = JSON.parse(e.data);
 
-                if (typeof data !== 'object' || data === null) {
-                    console.error('Invalid data format:', e.data);
+                if (typeof data !== "object" || data === null) {
+                    console.error("Invalid data format:", e.data);
                     return;
                 }
 
                 let logLevel = data.success ? LogLevel.INFO : LogLevel.DEBUG;
-                let message = `Клавиша '${data.key}' нажата - `
-                if (data.scene)
-                    message += `Сцена '${data.scene}' активирована`
-                else
-                    message += `Сцена не назначена`
+                console.log(logLevel);
+                let message = `Клавиша "${data.key}" нажата - `;
+                if (data.scene) {
+                    message += `Сцена "${data.scene}" активирована`;
+                } else {
+                    message += `Сцена не назначена`;
+                }
 
                 logMessage(message + "\t" + data.scene, logLevel);
             } catch (error) {
-                console.error('Failed to parse JSON:', e.data, error);
+                console.error("Failed to parse JSON:", e.data, error);
             }
         };
 
@@ -409,9 +411,9 @@
 
 
         document.addEventListener("DOMContentLoaded", function () {
-            document.querySelectorAll('.key-input, .scene-input, .scene-select').forEach(input => {
-                input.addEventListener('input', updateSetupOutput);
-                input.addEventListener('change', updateSetupOutput); // Ensures select changes trigger update
+            document.querySelectorAll(".key-input, .scene-input, .scene-select").forEach(input => {
+                input.addEventListener("input", updateSetupOutput);
+                input.addEventListener("change", updateSetupOutput); // Ensures select changes trigger update
             });
         });
 
