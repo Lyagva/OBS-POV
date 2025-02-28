@@ -30,7 +30,7 @@
             border-radius: 4px;
             border: 1px solid #ddd;
             box-sizing: border-box;
-            min-height: 400px; /* Adjust based on your design */
+            min-height: 400px;
         }
 
         .line {
@@ -83,6 +83,8 @@
             <button onclick="updateSceneList()">Обновить список сцен</button>
             <button onclick="copySetup()">Копировать конфигурацию</button>
             <button onclick="pasteSetup()">Вставить конфигурацию</button>
+            <button onclick="downloadSetup()">Сохранить настройки</button>
+            <button onclick="uploadSetup()">Загрузить настройки</button>
         </div>
     </div>
     <div class="input-textarea-container">
@@ -314,6 +316,54 @@
             }
         };
 
+        function downloadSetup() {
+            parseSetup();
+            const blob = new Blob([JSON.stringify(setup, null, 2)], { type: "application/json" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "setup.json";
+            a.click();
+        }
+
+        function uploadSetup() {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = "application/json";
+            input.style.display = "none";
+
+            input.addEventListener("change", function(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const json = JSON.parse(e.target.result);
+                        if (
+                            json &&
+                            Array.isArray(json.key) &&
+                            Array.isArray(json.scene) &&
+                            json.key.length === 10 &&
+                            json.scene.length === 10
+                        ) {
+                            setup = json;
+                            updateSetupInputFields();
+                            logMessage("Настройки успешно загружены из файла", LogLevel.INFO);
+                        } else {
+                            logMessage("Неверный формат файла настроек", LogLevel.ERROR);
+                        }
+                    } catch (error) {
+                        logMessage("Ошибка загрузки файла: " + error, LogLevel.ERROR);
+                    }
+                };
+                reader.readAsText(file);
+            });
+
+            document.body.appendChild(input);
+            input.click();
+            document.body.removeChild(input);
+        }
+
 
         document.addEventListener("DOMContentLoaded", function () {
             document.querySelectorAll('.key-input, .scene-input, .scene-select').forEach(input => {
@@ -321,7 +371,6 @@
                 input.addEventListener('change', updateSetupOutput); // Ensures select changes trigger update
             });
         });
-
 
         document.addEventListener("DOMContentLoaded", loadSetup);
     </script>
