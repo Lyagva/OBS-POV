@@ -168,7 +168,6 @@
         }
         let setup = {key: [], scene: []};
 
-        const MAX_LOG_HISTORY = {{ max_ui_log_history }};
 
         function toggleTheme() {
             document.body.classList.toggle("dark-theme");
@@ -184,7 +183,6 @@
         function logMessage(message, level) {
             const selectedLevel = document.getElementById("log-level-filter").value;
             const allowedLevels = LogLevelFilter[selectedLevel] || [];
-            if (!allowedLevels.includes(level)) return;
 
             const logEntries = document.getElementById("log-entries");
             const entry = document.createElement("div");
@@ -193,6 +191,15 @@
             const timestamp = new Date().toLocaleTimeString();
             entry.textContent = `[${level.toUpperCase()}] [${timestamp}] ${message}`;
 
+            fetch("/logs", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ level, timestamp, message })
+            }).catch(error => console.error("Failed to send log to server:", error));
+
+            if (!allowedLevels.includes(level)) return;
             logEntries.insertBefore(entry, logEntries.firstChild);
         }
 

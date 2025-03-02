@@ -9,6 +9,7 @@ from threading import Thread
 import config
 import os
 import sys
+import logging
 
 
 def get_base_path():
@@ -20,10 +21,31 @@ def get_base_path():
 
 app = Flask(__name__, template_folder=os.path.join(get_base_path(), "templates"))
 
+LOG_FILE = config.log_file
+
+# Configure logging to both file and console
+logger = logging.getLogger("app_logger")
+logger.setLevel(logging.DEBUG)
+
+# File handler (appends logs to file)
+file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
+file_handler.setLevel(logging.DEBUG)
+file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+file_handler.setFormatter(file_formatter)
+
+# Console handler (prints logs to console)
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)
+console_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+console_handler.setFormatter(console_formatter)
+
+# Add both handlers to logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
 @app.route('/')
 def index():
-    return render_template('index.html', scenes=[], max_ui_log_history=config.max_ui_log_history)
+    return render_template('index.html', scenes=[])
 
 
 @app.route("/scenes", methods=["GET"])
@@ -39,7 +61,7 @@ def post_setup():
         config.setup.clear()
         config.setup.update(new_setup)
 
-    print(config.setup)
+    # print(config.setup)
     return ""
 
 @app.route('/get_setup', methods=["GET"])
@@ -58,6 +80,35 @@ def key_log():
                 yield f"data: {json.dumps(config.key_log)}\n\n"
 
     return Response(generate(), mimetype='text/event-stream')
+
+@app.route("/logs", methods=["POST"])
+def receive_log():
+    try:
+        data = request.json
+        level = data.get("level", "INFO").upper()
+        timestamp = data.get("timestamp", "Unknown Time")
+        message = data.get("message", "")
+
+        log_entry = f"[{level}] [{timestamp}] {message}\n"
+
+        # Append log to file
+        with open(LOG_FILE, "a", encoding="utf-8") as log_file:
+            log_file.write(log_entry)
+
+        # Also log via Python logging module
+        if level == "ERROR":
+            logging.error(message)
+        elif level == "NOTICE":
+            logging.warning(message)  # Flask logging doesn't have NOTICE, so we use WARNING
+        elif level == "INFO":
+            logging.info(message)
+        elif level == "DEBUG":
+            logging.debug(message)
+
+        return jsonify({"status": "success"}), 200
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 if __name__ == '__main__':

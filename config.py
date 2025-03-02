@@ -1,15 +1,29 @@
-# config.py
+import configparser
 from threading import Lock, Condition
+
+# Initialize ConfigParser
+config = configparser.ConfigParser()
+config.read("config.ini")
 
 # Lock for thread-safe access
 lock = Lock()
 
-setup = {"key": [""] * 10, "scene": [""] * 10}
+# Read setup keys and scenes
+setup = {
+    "key": [""] * 10,
+    "scene": [""] * 10,
+}
 
-obs_host = "localhost"
-obs_port = 4455
-obs_password = "12345678"
+# Read OBS Configuration
+obs_host = config.get("OBS", "host")
+obs_port = config.getint("OBS", "port")
+obs_password = config.get("OBS", "password")
 
-log_file = "latest.log"
+flask_host = config.get("SERVER", "host")
+flask_port = config.get("SERVER", "port")
+
+
+# Read Logging Configuration
+log_file = config.get("Logging", "log_file")
 log_condition = Condition(lock)
 key_log = {}

@@ -7,8 +7,7 @@ with config.lock:
     port = config.obs_port
     password = config.obs_password
 
-# obs_client = obs.ReqClient(host=host, port=port, password=password)
-obs_client = obs.ReqClient()
+obs_client = obs.ReqClient(host=host, port=port, password=password)
 
 resp = obs_client.get_version()
 print(f"OBS Version: {resp.obs_version}")
