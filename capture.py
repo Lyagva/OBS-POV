@@ -1,4 +1,3 @@
-# capture.py
 import win32api
 import ctypes
 from ctypes import wintypes
@@ -8,43 +7,46 @@ from datetime import datetime
 import obs
 import config
 
-WH_KEYBOARD_LL = 13
-WM_KEYDOWN = 0x0100
-WM_SYSKEYDOWN = 0x0104
+# Windows hook constants
+WH_KEYBOARD_LL = 13  # Low-level keyboard hook
+WM_KEYDOWN = 0x0100  # Key press event
+WM_SYSKEYDOWN = 0x0104  # System key press event
 
-# Define the HOOKPROC type
+# Define the HOOKPROC callback function type
 HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.POINTER(ctypes.c_void_p))
 
-# Define Windows API functions for key name translation
+# Load user32.dll for Windows API functions
 user32 = ctypes.WinDLL('user32', use_last_error=True)
 
-# Define GetKeyNameTextW function
+# Configure GetKeyNameTextW function for translating virtual keys to names
 user32.GetKeyNameTextW.argtypes = [
     ctypes.c_long,  # lParam (scan code and flags)
-    ctypes.c_wchar_p,  # buffer
+    ctypes.c_wchar_p,  # buffer for key name
     ctypes.c_int  # buffer size
 ]
 user32.GetKeyNameTextW.restype = ctypes.c_int
 
-# Define MapVirtualKeyW for scan code conversion
+# Configure MapVirtualKeyW function for virtual-to-scan code conversion
 user32.MapVirtualKeyW.argtypes = [ctypes.c_uint, ctypes.c_uint]
 user32.MapVirtualKeyW.restype = ctypes.c_uint
 
-# Constants for MapVirtualKey
-MAPVK_VK_TO_VSC = 0
+# Constants for MapVirtualKey function
+MAPVK_VK_TO_VSC = 0  # Convert virtual key to scan code
 
 
 def get_key_name(vk_code):
-    # Get scan code from virtual key
+    """
+    Convert a virtual key code to its corresponding key name.
+
+    Args:
+        vk_code (int): Virtual key code.
+
+    Returns:
+        str: Readable key name or 'Unknown' if not found.
+    """
     scan_code = user32.MapVirtualKeyW(vk_code, MAPVK_VK_TO_VSC)
-
-    # Create buffer for key name
-    buf = ctypes.create_unicode_buffer(64)
-
-    # Format lParam: (scan_code << 16)
-    lParam = scan_code << 16
-
-    # Get key name
+    buf = ctypes.create_unicode_buffer(64)  # Buffer to store the key name
+    lParam = scan_code << 16  # Encode scan code in lParam
     user32.GetKeyNameTextW(lParam, buf, ctypes.sizeof(buf))
     return buf.value
 
@@ -54,13 +56,26 @@ exit_flag = False
 
 
 def low_level_keyboard_handler(nCode, wParam, lParam):
+    """
+    Callback function for processing low-level keyboard events.
+    Detects key presses and triggers scene changes if configured.
+
+    Args:
+        nCode (int): Hook code.
+        wParam (int): Event type (key press, system key press, etc.).
+        lParam (ctypes.POINTER): Pointer to event data.
+
+    Returns:
+        int: CallNextHookEx result to pass event to the next hook.
+    """
     global exit_flag
     if nCode >= 0:
         if wParam in (WM_KEYDOWN, WM_SYSKEYDOWN):
-            vk_code = lParam[0]
+            vk_code = lParam[0]  # Extract virtual key code
             try:
                 key_name = get_key_name(vk_code) or f"Unknown (VK: {vk_code})"
                 scene = ""
+
                 with config.lock:
                     if key_name in config.setup["key"]:
                         scene = config.setup["scene"][config.setup["key"].index(key_name)]
@@ -80,19 +95,19 @@ def low_level_keyboard_handler(nCode, wParam, lParam):
                     print(data)
                     config.log_condition.notify_all()
             except Exception as e:
-                print(f"Ошибка: {e}")
+                print(f"Error: {e}")
 
     return ctypes.windll.user32.CallNextHookEx(None, nCode, wParam, lParam)
 
 
 def main():
-    # Keep a reference to the hook procedure
-    hook_proc = HOOKPROC(low_level_keyboard_handler)
+    """
+    Main function to set up the low-level keyboard hook and start the message loop.
+    """
+    hook_proc = HOOKPROC(low_level_keyboard_handler)  # Define hook procedure
+    module_handle = ctypes.c_void_p(win32api.GetModuleHandle(None))  # Get module handle
 
-    # Get module handle (64-bit compatible)
-    module_handle = ctypes.c_void_p(win32api.GetModuleHandle(None))
-
-    # Install the keyboard hook
+    # Install the low-level keyboard hook
     hook_id = ctypes.windll.user32.SetWindowsHookExW(
         WH_KEYBOARD_LL,
         hook_proc,
@@ -106,7 +121,7 @@ def main():
 
     print("Hook installed. Press Ctrl+C to exit.")
 
-    # Message loop with timeout
+    # Message loop to keep the hook active
     try:
         msg = wintypes.MSG()
         while True:
@@ -125,6 +140,9 @@ def main():
 
 
 def run():
+    """
+    Entry point for the script. Ensures administrator privileges before execution.
+    """
     if ctypes.windll.shell32.IsUserAnAdmin() == 0:
         print("Error: Run this script as Administrator.")
         sys.exit(1)
